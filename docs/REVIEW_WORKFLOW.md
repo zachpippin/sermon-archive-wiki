@@ -28,6 +28,11 @@ Questionable claims appear in three places:
 - An inline `> [!warning] Review needed` callout on the sermon page.
 - `Review/Review Inbox.md`.
 
+Content gaps are summarized in `reports/completeness-report.md`. Check this
+after each ingest for pages with audio but no transcript text, pages without
+generated summaries, and catalog rows that claimed a transcript was available
+but did not have local transcript text.
+
 Generated summaries appear under `## Generated Summary`. AI summaries from an
 external command are tagged with:
 
@@ -49,4 +54,5 @@ summary_source: deterministic_content_index
 - Scripture references inferred from a title or transcript.
 - Caption-derived transcript errors.
 - Missing transcripts for audio-only records.
+- Pages listed in `reports/completeness-report.md`.
 - Any AI-generated summary, theme, topic, or related-sermon suggestion.

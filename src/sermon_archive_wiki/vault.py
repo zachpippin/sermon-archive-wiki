@@ -8,6 +8,7 @@ from typing import Any
 import yaml
 
 from .models import SermonRecord
+from .quality import completeness_counts
 from .scripture_index import ScriptureEntry, build_scripture_index, scripture_entry_totals, scripture_role
 from .util import markdown_table_row, media_uri, now_stamp, page_stem, safe_filename, wikilink, write_text
 
@@ -272,6 +273,7 @@ def write_theme_pages(vault_dir: Path, records: list[SermonRecord]) -> None:
 
 
 def write_review_pages(vault_dir: Path, records: list[SermonRecord]) -> None:
+    counts = completeness_counts(records)
     actionable_records = [
         record
         for record in records
@@ -302,8 +304,11 @@ def write_review_pages(vault_dir: Path, records: list[SermonRecord]) -> None:
         "",
         f"- Sermons generated: {len(records)}",
         f"- Draft pages: {sum(1 for record in records if record.review_status == 'draft')}",
-        f"- Pages with generated summaries: {sum(1 for record in records if record.generated_summary)}",
-        f"- Pages missing transcript text: {sum(1 for record in records if not record.transcript_text.strip())}",
+        f"- Pages with generated summaries: {counts['with_summary']}",
+        f"- Pages missing generated summaries: {counts['missing_summary']}",
+        f"- Pages missing transcript text: {counts['missing_transcript']}",
+        f"- Audio pages missing transcript text: {counts['audio_missing_transcript']}",
+        f"- Audio pages missing generated summaries: {counts['audio_missing_summary']}",
         "",
         "## Status Path",
         "",

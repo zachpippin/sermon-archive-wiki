@@ -128,6 +128,8 @@ def test_collect_records_merges_catalog_and_html_transcript(tmp_path: Path) -> N
     assert records[0].speaker == "Jane Pastor"
     assert records[0].transcript_status == "provided"
     assert "Romans 8" in records[0].transcript_text
+    assert not any("Catalog says a transcript exists" in flag for flag in records[0].review_flags)
+    assert any("extracted from local HTML" in flag for flag in records[0].review_flags)
 
 
 def test_catalog_flags_claimed_transcript_without_local_text(tmp_path: Path) -> None:

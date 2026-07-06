@@ -14,7 +14,7 @@ from .html_site import write_html_site
 from .inference import add_deterministic_inferences
 from .importers import collect_records
 from .normalization import apply_name_normalization
-from .reports import write_ingest_report, write_naming_report
+from .reports import write_completeness_report, write_ingest_report, write_naming_report
 from .summaries import apply_external_summary
 from .util import resolve_executable, split_list
 from .vault import write_vault
@@ -227,6 +227,7 @@ def _run_ingest(
     ensure_output_dirs(config)
     result = write_vault(records, target_vault, config)
     write_ingest_report(reports_dir / "review-report.md", records, target_vault)
+    write_completeness_report(reports_dir / "completeness-report.md", records)
     write_naming_report(reports_dir / "naming-report.md", naming_result)
     console.print(f"Wrote vault to [bold]{result['vault_dir']}[/bold].")
     should_write_site = bool(config.get("output", {}).get("include_html_site", True)) if html_site is None else html_site
@@ -236,6 +237,7 @@ def _run_ingest(
         console.print(f"Wrote local website to [bold]{site_result['site_dir']}[/bold].")
         console.print(f"Open in Chrome: [bold]{site_index.as_uri()}[/bold]")
     console.print(f"Wrote report to [bold]{reports_dir / 'review-report.md'}[/bold].")
+    console.print(f"Wrote completeness QA report to [bold]{reports_dir / 'completeness-report.md'}[/bold].")
     console.print(f"Wrote naming QA report to [bold]{reports_dir / 'naming-report.md'}[/bold].")
 
 

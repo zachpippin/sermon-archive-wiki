@@ -60,3 +60,4 @@ Open the generated vault folder in Obsidian and start with:
 - `Home.md`
 - `Review/Review Inbox.md`
 - `review-report.md`
+- `reports/completeness-report.md`

@@ -5,19 +5,24 @@ from pathlib import Path
 
 from .models import SermonRecord
 from .normalization import NamingPassResult
+from .quality import completeness_counts, completeness_issues, has_audio, has_summary, has_transcript
 from .util import markdown_table_row, write_text
 
 
 def write_ingest_report(path: Path, records: list[SermonRecord], vault_dir: Path) -> None:
+    counts = completeness_counts(records)
     lines = [
         "# Sermon Archive Wiki Ingest Report",
         "",
         f"- Vault: `{vault_dir}`",
         f"- Sermons discovered: {len(records)}",
         f"- Draft pages generated: {len(records)}",
-        f"- Transcripts provided: {sum(1 for record in records if record.transcript_text.strip())}",
-        f"- Missing transcripts: {sum(1 for record in records if not record.transcript_text.strip())}",
-        f"- Generated summaries: {sum(1 for record in records if record.generated_summary)}",
+        f"- Transcripts provided: {counts['with_transcript']}",
+        f"- Missing transcripts: {counts['missing_transcript']}",
+        f"- Generated summaries: {counts['with_summary']}",
+        f"- Missing summaries: {counts['missing_summary']}",
+        f"- Audio pages missing transcripts: {counts['audio_missing_transcript']}",
+        f"- Audio pages missing summaries: {counts['audio_missing_summary']}",
         "",
         "## Review Notes",
         "",
@@ -32,6 +37,50 @@ def write_ingest_report(path: Path, records: list[SermonRecord], vault_dir: Path
     for record in records:
         flags = "; ".join([*record.review_flags, *record.questionable_claims])
         lines.append(markdown_table_row([record.date or "?", record.title, record.transcript_status, flags]))
+    write_text(path, "\n".join(lines) + "\n")
+
+
+def write_completeness_report(path: Path, records: list[SermonRecord]) -> None:
+    counts = completeness_counts(records)
+    problem_records = [(record, completeness_issues(record)) for record in records]
+    problem_records = [(record, issues) for record, issues in problem_records if issues]
+    lines = [
+        "# Content Completeness QA",
+        "",
+        "This report checks whether generated sermon pages have the core review content pastors expect.",
+        "",
+        f"- Sermons discovered: {counts['sermons']}",
+        f"- Pages with audio: {counts['with_audio']}",
+        f"- Pages with transcript text: {counts['with_transcript']}",
+        f"- Pages missing transcript text: {counts['missing_transcript']}",
+        f"- Pages with generated summaries: {counts['with_summary']}",
+        f"- Pages missing generated summaries: {counts['missing_summary']}",
+        f"- Audio pages missing transcript text: {counts['audio_missing_transcript']}",
+        f"- Audio pages missing generated summaries: {counts['audio_missing_summary']}",
+        f"- Catalog-listed transcript gaps: {counts['catalog_listed_missing_transcript']}",
+        "",
+        "## Pages To Fix",
+        "",
+        "| Date | Title | Audio | Transcript | Summary | Transcript status | Issues |",
+        "|---|---|---|---|---|---|---|",
+    ]
+    if problem_records:
+        for record, issues in problem_records:
+            lines.append(
+                markdown_table_row(
+                    [
+                        record.date or "?",
+                        record.title,
+                        "yes" if has_audio(record) else "no",
+                        "yes" if has_transcript(record) else "no",
+                        "yes" if has_summary(record) else "no",
+                        record.transcript_status,
+                        "; ".join(issues),
+                    ]
+                )
+            )
+    else:
+        lines.append(markdown_table_row(["-", "No completeness issues found.", "-", "-", "-", "-", "-"]))
     write_text(path, "\n".join(lines) + "\n")
 
 

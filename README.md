@@ -29,7 +29,8 @@ V1 does not publish anything. It creates local files only, including an
   scripture passages, topics, themes, and related sermon suggestions.
 - Creates index pages for series, speakers, scripture, themes, and review
   status.
-- Writes `Review/Review Inbox.md` and `review-report.md`.
+- Writes `Review/Review Inbox.md`, `review-report.md`, and
+  `reports/completeness-report.md`.
 - Starts every generated page as `status: draft` and `review_status: draft`.
 - Marks inferred or uncertain claims in frontmatter, inline warning callouts,
   and the review inbox.
@@ -113,6 +114,11 @@ sermon-wiki-vault/
     Review Inbox.md
     Review Status.md
   review-report.md
+
+reports/
+  review-report.md
+  completeness-report.md  # missing transcripts, summaries, and audio/content gaps
+  naming-report.md
 ```
 
 ## AI Boundary

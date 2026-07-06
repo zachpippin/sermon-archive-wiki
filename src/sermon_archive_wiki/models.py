@@ -4,6 +4,13 @@ from dataclasses import dataclass, field
 from typing import Any
 
 
+RESOLVED_BY_TRANSCRIPT_FLAGS = {
+    "Audio file found; add transcript or run a separate transcription workflow.",
+    "Catalog says a transcript exists, but no local transcript file/text was provided.",
+    "HTML transcript file did not contain extractable transcript text.",
+}
+
+
 @dataclass
 class SermonRecord:
     title: str
@@ -70,6 +77,8 @@ class SermonRecord:
         self.audio_files = merge_unique(self.audio_files, other.audio_files)
         self.questionable_claims = merge_unique(self.questionable_claims, other.questionable_claims)
         self.review_flags = merge_unique(self.review_flags, other.review_flags)
+        if self.transcript_text.strip():
+            self.review_flags = [flag for flag in self.review_flags if flag not in RESOLVED_BY_TRANSCRIPT_FLAGS]
         self.extra.update({key: value for key, value in other.extra.items() if value not in ("", None, [], {})})
         return self
 

@@ -8,6 +8,7 @@ import textwrap
 from typing import Any, Callable
 
 from .models import SermonRecord
+from .quality import completeness_counts
 from .scripture_index import (
     ScriptureEntry,
     build_scripture_index,
@@ -328,6 +329,7 @@ def scripture_sermon_table(entries: list[ScriptureEntry], context: SiteContext, 
 
 
 def review_page(context: SiteContext, config: dict[str, Any]) -> str:
+    counts = completeness_counts(context.records)
     actionable = [
         record
         for record in context.records
@@ -337,7 +339,9 @@ def review_page(context: SiteContext, config: dict[str, Any]) -> str:
         "<h1>Review Inbox</h1>",
         '<p class="lede">Pages with specific flags, missing transcript text, or AI-generated content.</p>',
         f'<div class="stat-grid"><div class="stat"><strong>{len(actionable)}</strong><span>Actionable</span></div>'
-        f'<div class="stat"><strong>{len(context.records)}</strong><span>Total Drafts</span></div></div>',
+        f'<div class="stat"><strong>{len(context.records)}</strong><span>Total Drafts</span></div>'
+        f'<div class="stat"><strong>{counts["audio_missing_transcript"]}</strong><span>Audio Missing Transcript</span></div>'
+        f'<div class="stat"><strong>{counts["audio_missing_summary"]}</strong><span>Audio Missing Summary</span></div></div>',
         '<section class="panel">',
         '<input class="search" type="search" data-search-input placeholder="Filter review items">',
         '<table class="sermon-table sortable-table" data-sortable data-sort-initial="1:desc"><thead><tr>',

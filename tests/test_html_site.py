@@ -36,12 +36,14 @@ def test_html_site_writes_chrome_openable_pages(tmp_path: Path) -> None:
 
 def test_html_review_page_lists_actionable_items(tmp_path: Path) -> None:
     records = collect_records(caption_dirs=[Path("examples/fixtures/captions")])
+    records[0].audio_files = ["https://example.test/audio.mp3"]
 
     write_html_site(records, tmp_path, DEFAULT_CONFIG)
 
     review = (tmp_path / "review" / "index.html").read_text(encoding="utf-8")
     assert "Review Inbox" in review
     assert "Review inferred scripture reference." in review
+    assert "Audio Missing Summary" in review
 
 
 def test_html_category_indexes_are_count_sortable(tmp_path: Path) -> None:
