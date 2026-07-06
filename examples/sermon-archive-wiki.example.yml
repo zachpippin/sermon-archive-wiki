@@ -1,0 +1,56 @@
+church:
+  name: Example Church
+  timezone: America/New_York
+paths:
+  vault_dir: sermon-wiki-vault
+  site_dir: sermon-wiki-site
+  reports_dir: reports
+  transcript_dirs:
+    - examples/fixtures/transcripts
+  caption_dirs:
+    - examples/fixtures/captions
+  audio_dirs:
+    - examples/fixtures/audio
+  catalog_paths:
+    - examples/catalog.example.csv
+  youtube_metadata_paths:
+    - examples/fixtures/youtube/video.json
+  youtube_urls_file: ""
+  archivist_archive_dir: examples/fixtures/archivist_archive
+youtube:
+  fetch_metadata: true
+  yt_dlp_command: yt-dlp
+summary:
+  enabled: false
+  ask_during_ingest: true
+  external_command: ""
+  timeout_seconds: 180
+content_index:
+  enabled: false
+  max_related_sermons: 5
+  summary_sentences: 3
+normalization:
+  speaker_aliases:
+    Jane Pastor:
+      - Pastor Jane
+  series_aliases: {}
+  annual_series_patterns:
+    - canonical: "Advent {year}"
+      aliases:
+        - Advent
+        - Christmas
+      require_week: false
+      override_existing: false
+  title_series_patterns:
+    - pattern: '^Membership\b'
+      series: Membership
+  infer_scripture_book_series_from_title: true
+  scripture_aliases: {}
+  theme_aliases: {}
+  ignored_speakers:
+    - Example Church
+output:
+  include_html_site: true
+  obsidian_wikilinks: true
+  include_full_transcripts: true
+  transcript_excerpt_chars: 0

@@ -1,0 +1,14 @@
+sermons:
+  - title: Ordinary Courage
+    date: 2026-07-05
+    speaker: Jane Pastor
+    series: Ordinary Faith
+    scripture_refs:
+      - Joshua 1:1-9
+    topics:
+      - Discipleship
+    themes:
+      - Courage
+    transcript_path: examples/fixtures/transcripts/2026-07-05_Ordinary_Courage.txt
+    audio_path: examples/fixtures/audio/2026-07-05_Ordinary_Courage.mp3
+    youtube_url: https://www.youtube.com/watch?v=example123
