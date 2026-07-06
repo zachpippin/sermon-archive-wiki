@@ -7,6 +7,8 @@ paths:
   reports_dir: reports
   transcript_dirs:
     - examples/fixtures/transcripts
+  html_transcript_dirs:
+    - examples/fixtures/html
   caption_dirs:
     - examples/fixtures/captions
   audio_dirs:

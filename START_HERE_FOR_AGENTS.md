@@ -24,8 +24,8 @@ Then stop and show the volunteer:
 ## What To Tell The Volunteer
 
 "This will not publish anything. It creates a local website and Markdown vault
-on this Mac. It can use transcripts, captions, audio files, YouTube metadata, and
-`church-sermon-archivist` folders. Any optional AI summary will be clearly
+on this Mac. It can use transcripts, saved sermon-page HTML, captions, audio
+files, YouTube metadata, and `church-sermon-archivist` folders. Any optional AI summary will be clearly
 tagged for review."
 
 ## What Not To Do

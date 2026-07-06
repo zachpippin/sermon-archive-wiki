@@ -19,6 +19,7 @@ DEFAULT_CONFIG: dict[str, Any] = {
         "site_dir": "sermon-wiki-site",
         "reports_dir": "reports",
         "transcript_dirs": [],
+        "html_transcript_dirs": [],
         "caption_dirs": [],
         "audio_dirs": [],
         "catalog_paths": [],

@@ -90,6 +90,20 @@ def write_text(path: Path, text: str) -> None:
     path.write_text(text, encoding="utf-8")
 
 
+def media_uri(source: str) -> str:
+    """Return a browser-friendly URI for a URL or local media path."""
+    text = source.strip()
+    if text.startswith(("http://", "https://", "file://")):
+        return text
+    path = Path(text).expanduser()
+    if not path.is_absolute():
+        path = Path.cwd() / path
+    try:
+        return path.resolve().as_uri()
+    except ValueError:
+        return text
+
+
 def wikilink(target: str, label: str | None = None) -> str:
     target = clean_wikilink_part(target)
     label = clean_wikilink_part(label or "")

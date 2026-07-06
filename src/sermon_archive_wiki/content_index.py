@@ -11,6 +11,48 @@ from .util import page_stem
 
 WORD_RE = re.compile(r"[a-z][a-z']{2,}")
 SENTENCE_RE = re.compile(r"(?<=[.!?])\s+|\n+")
+SUMMARY_SKIP_PHRASES = (
+    "all right",
+    "before i read",
+    "grab a bible",
+    "heavenly father",
+    "if you have a bible",
+    "if you will grab",
+    "i'm going to pray",
+    "last week",
+    "let me just recap",
+    "my name is",
+    "open up your bibles",
+    "turn to",
+    "we are back",
+    "we're going to be",
+    "we're going to look",
+    "we're going to read",
+    "we've labeled it",
+    "welcome",
+    "you should be excited",
+)
+SUMMARY_SIGNAL_PHRASES = (
+    "the point",
+    "main point",
+    "what we see",
+    "what's wonderful",
+    "the picture",
+    "that means",
+    "there is a day coming",
+    "the sermon calls",
+    "the passage shows",
+    "we should",
+    "we need",
+    "my hope",
+    "hope is",
+    "restoration",
+    "eternity",
+    "gospel",
+    "kingdom",
+    "peace",
+    "glory",
+)
 STOPWORDS = {
     "about",
     "after",
@@ -141,10 +183,11 @@ def apply_content_index(
                 record.generated_summary = summary
                 record.summary_status = "deterministic_review_required"
                 record.summary_source = "deterministic_content_index"
-        themes, topics = infer_content_labels(record)
-        record.themes = merge_unique(record.themes, themes)
-        record.topics = merge_unique(record.topics, topics)
-        if record.generated_summary:
+        if record.summary_source != "external_command":
+            themes, topics = infer_content_labels(record)
+            record.themes = merge_unique(record.themes, themes)
+            record.topics = merge_unique(record.topics, topics)
+        if record.generated_summary and record.summary_source != "external_command":
             append_unique(record.review_flags, "Generated content summary/themes were added locally; review before relying on them.")
 
     if max_related_sermons > 0:
@@ -156,31 +199,86 @@ def apply_content_index(
 
 def extractive_summary(record: SermonRecord, document_frequency: Counter[str], document_count: int, sentence_count: int) -> str:
     sentences = [clean_sentence(sentence) for sentence in SENTENCE_RE.split(record.transcript_text)]
-    candidates = [sentence for sentence in sentences if 45 <= len(sentence) <= 360 and len(tokens(sentence)) >= 8]
     prefix = summary_prefix(record)
+    candidates = [
+        (position, sentence)
+        for position, sentence in enumerate(sentences)
+        if is_summary_candidate(sentence)
+    ]
     if not candidates:
         return " ".join(part for part in (prefix, fallback_summary(record.transcript_text)) if part).strip()
     title_terms = set(tokens(" ".join([record.title, record.series, " ".join(record.scripture_refs)])))
     scored: list[tuple[float, int, str]] = []
-    for position, sentence in enumerate(candidates[:800]):
+    for position, sentence in candidates[:900]:
         sentence_tokens = tokens(sentence)
         if not sentence_tokens:
             continue
         score = sum(inverse_document_frequency(term, document_frequency, document_count) for term in sentence_tokens)
         score /= math.sqrt(len(sentence_tokens))
         if title_terms.intersection(sentence_tokens):
-            score *= 1.15
+            score *= 1.08
+        score *= summary_quality_multiplier(sentence, position)
         scored.append((score, position, sentence))
-    selected = sorted(sorted(scored, reverse=True)[: max(1, sentence_count)], key=lambda item: item[1])
+    selected = select_diverse_sentences(scored, max(1, sentence_count))
     summary = " ".join(sentence for _score, _position, sentence in selected)
-    summary = " ".join(part for part in (prefix, summary) if part)
-    return re.sub(r"\s+", " ", summary).strip()
+    summary = " ".join(part for part in (prefix, "Generated review summary:", summary) if part)
+    summary = re.sub(r"\s+", " ", summary).strip()
+    return textwrap.shorten(summary, width=950, placeholder="...")
+
+
+def is_summary_candidate(sentence: str) -> bool:
+    lowered = sentence.casefold()
+    if not 55 <= len(sentence) <= 420:
+        return False
+    if len(tokens(sentence)) < 8:
+        return False
+    if any(phrase in lowered for phrase in SUMMARY_SKIP_PHRASES):
+        return False
+    return True
+
+
+def summary_quality_multiplier(sentence: str, position: int) -> float:
+    lowered = sentence.casefold()
+    multiplier = 1.0
+    if position < 6:
+        multiplier *= 0.55
+    if any(phrase in lowered for phrase in SUMMARY_SIGNAL_PHRASES):
+        multiplier *= 1.35
+    if " uh " in f" {lowered} " or " um " in f" {lowered} ":
+        multiplier *= 0.78
+    if lowered.count(" i ") + lowered.count(" me ") + lowered.count(" my ") >= 4:
+        multiplier *= 0.82
+    if len(sentence) > 320:
+        multiplier *= 0.78
+    return multiplier
+
+
+def select_diverse_sentences(scored: list[tuple[float, int, str]], limit: int) -> list[tuple[float, int, str]]:
+    selected: list[tuple[float, int, str]] = []
+    selected_terms: list[set[str]] = []
+    for score, position, sentence in sorted(scored, reverse=True):
+        current_terms = set(tokens(sentence))
+        if any(jaccard_similarity(current_terms, terms) > 0.45 for terms in selected_terms):
+            continue
+        selected.append((score, position, sentence))
+        selected_terms.append(current_terms)
+        if len(selected) >= limit:
+            break
+    return sorted(selected, key=lambda item: item[1])
+
+
+def jaccard_similarity(left: set[str], right: set[str]) -> float:
+    if not left or not right:
+        return 0.0
+    return len(left.intersection(right)) / len(left.union(right))
 
 
 def infer_content_labels(record: SermonRecord) -> tuple[list[str], list[str]]:
-    text = " ".join([record.title, record.series, " ".join(record.scripture_refs), record.transcript_text]).casefold()
-    themes = ranked_labels(text, THEME_RULES, minimum=3)[:6]
-    topics = ranked_labels(text, TOPIC_RULES, minimum=3)[:8]
+    metadata = " ".join([record.title, record.series, " ".join(record.scripture_refs)]).casefold()
+    early = record.transcript_text[:5000].casefold()
+    full = record.transcript_text.casefold()
+    themes = ranked_labels(metadata, early, full, THEME_RULES, minimum=4)[:6]
+    topics = ranked_labels(metadata, early, full, TOPIC_RULES, minimum=4)[:8]
     return themes, topics
 
 
@@ -200,15 +298,29 @@ def fallback_summary(text: str) -> str:
     return textwrap.shorten(cleaned, width=520, placeholder="...")
 
 
-def ranked_labels(text: str, rules: dict[str, tuple[str, ...]], minimum: int) -> list[str]:
+def ranked_labels(metadata: str, early: str, full: str, rules: dict[str, tuple[str, ...]], minimum: int) -> list[str]:
     scored: list[tuple[int, str]] = []
     for label, keywords in rules.items():
         score = 0
         for keyword in keywords:
-            score += len(re.findall(rf"\b{re.escape(keyword.casefold())}\b", text))
-        if score >= minimum:
+            pattern = rf"\b{re.escape(keyword.casefold())}\b"
+            score += len(re.findall(pattern, metadata)) * 8
+            score += len(re.findall(pattern, early)) * 3
+            score += len(re.findall(pattern, full))
+        label_minimum = noisy_label_minimum(label, minimum)
+        if score >= label_minimum:
             scored.append((score, label))
     return [label for _score, label in sorted(scored, key=lambda item: (-item[0], item[1]))]
+
+
+def noisy_label_minimum(label: str, default: int) -> int:
+    noisy = {
+        "Marriage and Family": 12,
+        "Parenting": 12,
+        "Love": 8,
+        "Money": 8,
+    }
+    return noisy.get(label, default)
 
 
 def related_records(

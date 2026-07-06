@@ -4,6 +4,7 @@ __pycache__/
 .pytest_cache/
 sermon-archive-wiki.yml
 *.local.yml
+*.local.py
 sermon-wiki-vault*/
 sermon-wiki-site*/
 reports*/

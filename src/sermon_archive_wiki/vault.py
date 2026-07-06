@@ -9,7 +9,7 @@ import yaml
 
 from .models import SermonRecord
 from .scripture_index import ScriptureEntry, build_scripture_index, scripture_entry_totals, scripture_role
-from .util import markdown_table_row, now_stamp, page_stem, safe_filename, wikilink, write_text
+from .util import markdown_table_row, media_uri, now_stamp, page_stem, safe_filename, wikilink, write_text
 
 
 def write_vault(records: list[SermonRecord], vault_dir: Path, config: dict[str, Any]) -> dict[str, Any]:
@@ -78,6 +78,7 @@ def sermon_page(record: SermonRecord, config: dict[str, Any]) -> str:
         lines.append("")
 
     lines.extend(metadata_section(record))
+    lines.extend(audio_section(record))
     lines.extend(summary_section(record))
     lines.extend(cross_reference_section(record))
     lines.extend(source_section(record))
@@ -128,6 +129,22 @@ def summary_section(record: SermonRecord) -> list[str]:
     else:
         lines.append("_No generated summary was created for this sermon._")
         lines.append("")
+    return lines
+
+
+def audio_section(record: SermonRecord) -> list[str]:
+    if not record.audio_files:
+        return []
+    lines = ["## Audio", ""]
+    seen: set[str] = set()
+    for index, audio in enumerate(record.audio_files, start=1):
+        normalized = audio.strip()
+        if not normalized or normalized in seen:
+            continue
+        seen.add(normalized)
+        label = "Listen" if index == 1 else f"Listen {index}"
+        lines.append(f"- [{label}]({media_uri(normalized)})")
+    lines.append("")
     return lines
 
 
@@ -286,7 +303,7 @@ def write_review_pages(vault_dir: Path, records: list[SermonRecord]) -> None:
         f"- Sermons generated: {len(records)}",
         f"- Draft pages: {sum(1 for record in records if record.review_status == 'draft')}",
         f"- Pages with generated summaries: {sum(1 for record in records if record.generated_summary)}",
-        f"- Pages missing transcripts: {sum(1 for record in records if record.transcript_status == 'missing')}",
+        f"- Pages missing transcript text: {sum(1 for record in records if not record.transcript_text.strip())}",
         "",
         "## Status Path",
         "",

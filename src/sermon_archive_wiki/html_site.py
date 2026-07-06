@@ -16,7 +16,7 @@ from .scripture_index import (
     scripture_flag,
     scripture_role,
 )
-from .util import page_stem, slugify, write_text
+from .util import media_uri, page_stem, slugify, write_text
 
 
 def write_html_site(records: list[SermonRecord], site_dir: Path, config: dict[str, Any]) -> dict[str, Any]:
@@ -104,6 +104,7 @@ def sermon_page(record: SermonRecord, context: SiteContext, config: dict[str, An
     body: list[str] = [f"<h1>{escape(record.title)}</h1>"]
     body.append('<div class="sermon-layout">')
     body.append('<article class="article">')
+    body.append(audio_html(record))
     if record.review_flags or record.questionable_claims:
         body.append(callout("Review needed", [*record.review_flags, *record.questionable_claims]))
     body.append("<h2>Summary</h2>")
@@ -383,21 +384,34 @@ def sermon_table(records: list[SermonRecord], context: SiteContext, depth: int) 
         sortable_header("Title", help_text="Sermon title. Click to open the generated sermon page."),
         sortable_header("Speaker", help_text="Preacher or speaker associated with the sermon."),
         sortable_header("Series", help_text="Sermon series associated with the sermon."),
+        sortable_header("Audio", help_text="Whether an audio URL or local audio file is available. Open the sermon page to listen."),
         sortable_header("Transcript", help_text="Whether transcript text was provided, caption-derived, catalog-only, or missing."),
         "</tr></thead><tbody>",
     ]
     for record in records:
+        audio_status = "available" if record.audio_files else ""
         blob = search_blob(
-            [record.title, record.date, record.speaker, record.series, " ".join(record.scripture_refs), " ".join(record.mentioned_scripture_refs), record.transcript_status]
+            [
+                record.title,
+                record.date,
+                record.speaker,
+                record.series,
+                " ".join(record.scripture_refs),
+                " ".join(record.mentioned_scripture_refs),
+                audio_status,
+                record.transcript_status,
+            ]
         )
         speaker_cell = entity_link("speakers", record.speaker, context, depth) if record.speaker else '<span class="muted">Review</span>'
         series_cell = entity_link("series", record.series, context, depth) if record.series else '<span class="muted">Review</span>'
+        audio_cell = f'<a href="{context.sermon_href(record, depth)}#audio">Listen</a>' if record.audio_files else '<span class="muted">No audio</span>'
         rows.append(
             f'<tr data-search-row data-search="{blob}">'
             f'<td data-sort-value="{escape(record.date, quote=True)}">{escape(record.date or "?")}</td>'
             f'<td data-sort-value="{sort_attr(record.title)}"><a href="{context.sermon_href(record, depth)}">{escape(record.title)}</a></td>'
             f'<td data-sort-value="{sort_attr(record.speaker)}">{speaker_cell}</td>'
             f'<td data-sort-value="{sort_attr(record.series)}">{series_cell}</td>'
+            f'<td data-sort-value="{sort_attr(audio_status)}">{audio_cell}</td>'
             f'<td data-sort-value="{sort_attr(record.transcript_status)}">{escape(record.transcript_status)}</td>'
             "</tr>"
         )
@@ -431,9 +445,10 @@ def sermon_cards(records: list[SermonRecord], context: SiteContext, depth: int) 
     cards = ['<div class="card-grid">']
     for record in records:
         meta = " | ".join(part for part in (record.date, record.speaker, record.series) if part)
+        audio_badge = '<span class="card-badge">Audio</span>' if record.audio_files else ""
         cards.append(
             f'<a class="card" href="{context.sermon_href(record, depth)}">'
-            f"<strong>{escape(record.title)}</strong><span>{escape(meta)}</span></a>"
+            f"<strong>{escape(record.title)}</strong><span>{escape(meta)}</span>{audio_badge}</a>"
         )
     cards.append("</div>")
     return "\n".join(cards)
@@ -462,6 +477,8 @@ def metadata_aside(record: SermonRecord, context: SiteContext) -> str:
     for label, value in items:
         html.append(f"<dt>{escape(label)}</dt><dd>{value}</dd>")
     html.append("</dl>")
+    if record.audio_files:
+        html.append(f'<a class="button" href="{escape(media_uri(record.audio_files[0]), quote=True)}">Open audio</a>')
     if record.youtube_url:
         html.append(f'<a class="button" href="{escape(record.youtube_url)}">Open YouTube</a>')
     html.append("<h3>Sources</h3><ul>")
@@ -494,6 +511,44 @@ def summary_callout_title(record: SermonRecord) -> str:
     if record.summary_source == "external_command" or "ai" in record.summary_status.casefold():
         return "AI-generated summary; review before relying on it"
     return "Generated summary; review before relying on it"
+
+
+def audio_html(record: SermonRecord) -> str:
+    if not record.audio_files:
+        return ""
+    players = ['<section class="audio-panel" id="audio">', "<h2>Audio</h2>"]
+    for index, source in enumerate(unique_values(record.audio_files), start=1):
+        source_uri = media_uri(source)
+        label = audio_label(source, index)
+        players.append(
+            '<div class="audio-item">'
+            f'<audio controls preload="metadata" src="{escape(source_uri, quote=True)}">'
+            f'<a href="{escape(source_uri, quote=True)}">{escape(label)}</a>'
+            "</audio>"
+            f'<a class="audio-link" href="{escape(source_uri, quote=True)}">{escape(label)}</a>'
+            "</div>"
+        )
+    players.append("</section>")
+    return "\n".join(players)
+
+
+def audio_label(source: str, index: int) -> str:
+    if source.startswith(("http://", "https://")):
+        return "Open audio" if index == 1 else f"Open audio {index}"
+    name = Path(source).name
+    return name or ("Open audio" if index == 1 else f"Open audio {index}")
+
+
+def unique_values(values: list[str]) -> list[str]:
+    seen: set[str] = set()
+    unique: list[str] = []
+    for value in values:
+        normalized = value.strip()
+        if not normalized or normalized in seen:
+            continue
+        seen.add(normalized)
+        unique.append(normalized)
+    return unique
 
 
 def page_stem_for_related(record: SermonRecord) -> str:
@@ -571,7 +626,7 @@ def layout(title: str, body: str, depth: int, active: str) -> str:
 def write_assets(site_dir: Path) -> None:
     write_text(
         site_dir / "assets" / "site.css",
-        """*{box-sizing:border-box}body{margin:0;background:#f7f6f1;color:#222;font:16px/1.55 Georgia,"Times New Roman",serif}.app-shell{display:grid;grid-template-columns:260px minmax(0,1fr);min-height:100vh}.sidebar{background:#fdfcf8;border-right:1px solid #d9d4c8;padding:24px;position:sticky;top:0;height:100vh}.brand{display:block;color:#111;font:700 22px/1.1 system-ui,sans-serif;text-decoration:none;margin-bottom:24px}.sidebar nav{display:grid;gap:4px}.sidebar nav a{color:#2d4b73;text-decoration:none;border-radius:6px;padding:8px 10px;font:600 14px/1.2 system-ui,sans-serif}.sidebar nav a:hover,.sidebar nav a.active{background:#e9eef5}.local-note{color:#746f66;font:13px/1.4 system-ui,sans-serif;margin-top:28px}.content{max-width:1180px;padding:36px 44px}h1{font:700 40px/1.12 system-ui,sans-serif;margin:0 0 12px}h2{font:700 24px/1.2 system-ui,sans-serif;margin:32px 0 12px}h3{font:700 16px/1.2 system-ui,sans-serif;margin:24px 0 8px}.lede{font-size:19px;color:#4a4740;max-width:760px}.stat-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:12px;margin:24px 0}.stat{background:#fff;border:1px solid #d9d4c8;border-radius:8px;padding:16px}.stat strong{display:block;font:800 30px/1 system-ui,sans-serif}.stat span{color:#675f54;font:13px/1.3 system-ui,sans-serif;text-transform:uppercase;letter-spacing:.04em}.panel{background:#fff;border:1px solid #d9d4c8;border-radius:8px;padding:18px;margin:22px 0}.search{width:100%;border:1px solid #bbb3a3;border-radius:6px;padding:11px 12px;margin:0 0 14px;font:16px system-ui,sans-serif}.sermon-table{width:100%;border-collapse:collapse;background:#fff}.sermon-table th,.sermon-table td{border-bottom:1px solid #e5e0d6;padding:9px 8px;text-align:left;vertical-align:top}.sermon-table th{font:700 13px system-ui,sans-serif;color:#5e574d;background:#faf8f2}.th-content{display:flex;align-items:center;gap:6px;position:relative}.sermon-table th .sort-button{display:flex;align-items:center;gap:6px;border:0;background:transparent;color:inherit;font:inherit;text-align:left;padding:0;cursor:pointer}.sermon-table th .sort-button:hover{color:#214f88}.sort-indicator{color:#8a8276;font-size:11px}.sort-indicator::after{content:"^v"}.sermon-table th[aria-sort=ascending] .sort-indicator::after{content:"^"}.sermon-table th[aria-sort=descending] .sort-indicator::after{content:"v"}.info-popover{display:inline-flex;align-items:center;position:relative;outline:0}.info-icon{display:inline-grid;place-items:center;width:16px;height:16px;border:1px solid #bbb3a3;border-radius:50%;background:#fff;color:#5e574d;font:700 11px/1 system-ui,sans-serif;cursor:help}.info-popover:hover .info-icon,.info-popover:focus .info-icon{border-color:#214f88;color:#214f88}.info-bubble{display:none;position:absolute;z-index:20;top:calc(100% + 8px);left:0;width:max-content;max-width:280px;min-width:220px;background:#fff;border:1px solid #bdb4a6;border-radius:6px;box-shadow:0 10px 24px rgba(0,0,0,.14);color:#2d2a26;font:12px/1.4 system-ui,sans-serif;padding:10px;white-space:normal;text-transform:none;letter-spacing:0}.info-popover:hover .info-bubble,.info-popover:focus .info-bubble{display:block}.sermon-table th:last-child .info-bubble{left:auto;right:0}.sermon-table td{font-size:15px}.sermon-table a,a{color:#214f88}.card-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(230px,1fr));gap:12px}.card{display:block;background:#fff;border:1px solid #d9d4c8;border-radius:8px;padding:14px;color:#1d3554;text-decoration:none}.card strong{display:block;font:700 16px/1.2 system-ui,sans-serif}.card span{display:block;color:#6c655b;font:13px/1.4 system-ui,sans-serif;margin-top:8px}.sermon-layout{display:grid;grid-template-columns:minmax(0,1fr) 310px;gap:28px}.article,.infobox{background:#fff;border:1px solid #d9d4c8;border-radius:8px;padding:22px}.infobox{align-self:start;position:sticky;top:24px}.infobox dl{display:grid;grid-template-columns:94px 1fr;gap:8px;margin:0}.infobox dt{font:700 13px system-ui,sans-serif;color:#655d53}.infobox dd{margin:0}.infobox ul{padding-left:18px;overflow-wrap:anywhere}.button{display:inline-block;background:#214f88;color:white;text-decoration:none;border-radius:6px;padding:9px 12px;margin:14px 0;font:700 14px system-ui,sans-serif}.callout{border-left:4px solid #a45f00;background:#fff7e8;padding:12px 14px;margin:18px 0}.callout.note{border-color:#34699a;background:#eef6ff}.callout ul{margin:8px 0 0;padding-left:20px}.pill-row{display:flex;flex-wrap:wrap;gap:8px}.pill{background:#eef1ea;border:1px solid #d4d9ce;border-radius:999px;padding:5px 9px;font:14px system-ui,sans-serif}.transcript{max-width:820px}.transcript p{margin:0 0 1em}.entity-list{display:grid;gap:6px}.entity-row{display:flex;justify-content:space-between;gap:16px;background:#fbfaf6;border:1px solid #e3ded4;border-radius:6px;padding:10px 12px;text-decoration:none;color:#1d3554}.entity-row strong{font-family:system-ui,sans-serif}.muted{color:#746f66}code{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:.9em;overflow-wrap:anywhere}@media(max-width:850px){.app-shell{display:block}.sidebar{position:static;height:auto;border-right:0;border-bottom:1px solid #d9d4c8}.content{padding:24px 18px}.sermon-layout{grid-template-columns:1fr}.infobox{position:static}h1{font-size:32px}}""",
+        """*{box-sizing:border-box}body{margin:0;background:#f7f6f1;color:#222;font:16px/1.55 Georgia,"Times New Roman",serif}.app-shell{display:grid;grid-template-columns:260px minmax(0,1fr);min-height:100vh}.sidebar{background:#fdfcf8;border-right:1px solid #d9d4c8;padding:24px;position:sticky;top:0;height:100vh}.brand{display:block;color:#111;font:700 22px/1.1 system-ui,sans-serif;text-decoration:none;margin-bottom:24px}.sidebar nav{display:grid;gap:4px}.sidebar nav a{color:#2d4b73;text-decoration:none;border-radius:6px;padding:8px 10px;font:600 14px/1.2 system-ui,sans-serif}.sidebar nav a:hover,.sidebar nav a.active{background:#e9eef5}.local-note{color:#746f66;font:13px/1.4 system-ui,sans-serif;margin-top:28px}.content{max-width:1180px;padding:36px 44px}h1{font:700 40px/1.12 system-ui,sans-serif;margin:0 0 12px}h2{font:700 24px/1.2 system-ui,sans-serif;margin:32px 0 12px}h3{font:700 16px/1.2 system-ui,sans-serif;margin:24px 0 8px}.lede{font-size:19px;color:#4a4740;max-width:760px}.stat-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:12px;margin:24px 0}.stat{background:#fff;border:1px solid #d9d4c8;border-radius:8px;padding:16px}.stat strong{display:block;font:800 30px/1 system-ui,sans-serif}.stat span{color:#675f54;font:13px/1.3 system-ui,sans-serif;text-transform:uppercase;letter-spacing:.04em}.panel{background:#fff;border:1px solid #d9d4c8;border-radius:8px;padding:18px;margin:22px 0}.search{width:100%;border:1px solid #bbb3a3;border-radius:6px;padding:11px 12px;margin:0 0 14px;font:16px system-ui,sans-serif}.sermon-table{width:100%;border-collapse:collapse;background:#fff}.sermon-table th,.sermon-table td{border-bottom:1px solid #e5e0d6;padding:9px 8px;text-align:left;vertical-align:top}.sermon-table th{font:700 13px system-ui,sans-serif;color:#5e574d;background:#faf8f2}.th-content{display:flex;align-items:center;gap:6px;position:relative}.sermon-table th .sort-button{display:flex;align-items:center;gap:6px;border:0;background:transparent;color:inherit;font:inherit;text-align:left;padding:0;cursor:pointer}.sermon-table th .sort-button:hover{color:#214f88}.sort-indicator{color:#8a8276;font-size:11px}.sort-indicator::after{content:"^v"}.sermon-table th[aria-sort=ascending] .sort-indicator::after{content:"^"}.sermon-table th[aria-sort=descending] .sort-indicator::after{content:"v"}.info-popover{display:inline-flex;align-items:center;position:relative;outline:0}.info-icon{display:inline-grid;place-items:center;width:16px;height:16px;border:1px solid #bbb3a3;border-radius:50%;background:#fff;color:#5e574d;font:700 11px/1 system-ui,sans-serif;cursor:help}.info-popover:hover .info-icon,.info-popover:focus .info-icon{border-color:#214f88;color:#214f88}.info-bubble{display:none;position:absolute;z-index:20;top:calc(100% + 8px);left:0;width:max-content;max-width:280px;min-width:220px;background:#fff;border:1px solid #bdb4a6;border-radius:6px;box-shadow:0 10px 24px rgba(0,0,0,.14);color:#2d2a26;font:12px/1.4 system-ui,sans-serif;padding:10px;white-space:normal;text-transform:none;letter-spacing:0}.info-popover:hover .info-bubble,.info-popover:focus .info-bubble{display:block}.sermon-table th:last-child .info-bubble{left:auto;right:0}.sermon-table td{font-size:15px}.sermon-table a,a{color:#214f88}.card-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(230px,1fr));gap:12px}.card{display:block;background:#fff;border:1px solid #d9d4c8;border-radius:8px;padding:14px;color:#1d3554;text-decoration:none}.card strong{display:block;font:700 16px/1.2 system-ui,sans-serif}.card span{display:block;color:#6c655b;font:13px/1.4 system-ui,sans-serif;margin-top:8px}.card-badge{display:inline-block;border:1px solid #c9d5e4;background:#eef6ff;color:#214f88;border-radius:999px;padding:2px 7px;font:700 11px/1.4 system-ui,sans-serif}.sermon-layout{display:grid;grid-template-columns:minmax(0,1fr) 310px;gap:28px}.article,.infobox{background:#fff;border:1px solid #d9d4c8;border-radius:8px;padding:22px}.infobox{align-self:start;position:sticky;top:24px}.infobox dl{display:grid;grid-template-columns:94px 1fr;gap:8px;margin:0}.infobox dt{font:700 13px system-ui,sans-serif;color:#655d53}.infobox dd{margin:0}.infobox ul{padding-left:18px;overflow-wrap:anywhere}.button{display:inline-block;background:#214f88;color:white;text-decoration:none;border-radius:6px;padding:9px 12px;margin:14px 0;font:700 14px system-ui,sans-serif}.audio-panel{border:1px solid #d7dde8;background:#f5f9ff;border-radius:8px;padding:14px;margin:0 0 18px}.audio-panel h2{margin:0 0 10px;font-size:18px}.audio-item{display:grid;gap:7px}.audio-item+ .audio-item{margin-top:12px}.audio-item audio{width:100%}.audio-link{font:700 13px/1.3 system-ui,sans-serif}.callout{border-left:4px solid #a45f00;background:#fff7e8;padding:12px 14px;margin:18px 0}.callout.note{border-color:#34699a;background:#eef6ff}.callout ul{margin:8px 0 0;padding-left:20px}.pill-row{display:flex;flex-wrap:wrap;gap:8px}.pill{background:#eef1ea;border:1px solid #d4d9ce;border-radius:999px;padding:5px 9px;font:14px system-ui,sans-serif}.transcript{max-width:820px}.transcript p{margin:0 0 1em}.entity-list{display:grid;gap:6px}.entity-row{display:flex;justify-content:space-between;gap:16px;background:#fbfaf6;border:1px solid #e3ded4;border-radius:6px;padding:10px 12px;text-decoration:none;color:#1d3554}.entity-row strong{font-family:system-ui,sans-serif}.muted{color:#746f66}code{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:.9em;overflow-wrap:anywhere}@media(max-width:850px){.app-shell{display:block}.sidebar{position:static;height:auto;border-right:0;border-bottom:1px solid #d9d4c8}.content{padding:24px 18px}.sermon-layout{grid-template-columns:1fr}.infobox{position:static}h1{font-size:32px}}""",
     )
     write_text(
         site_dir / "assets" / "site.js",

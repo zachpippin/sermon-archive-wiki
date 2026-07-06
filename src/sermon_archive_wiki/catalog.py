@@ -48,6 +48,12 @@ def record_from_mapping(row: dict[str, Any], source: Path) -> SermonRecord:
     audio_path = str(row.get("audio_path") or row.get("audio") or row.get("mp3_url") or "").strip()
     youtube_url = str(row.get("youtube_url") or row.get("url") or "").strip()
     sermon_page_url = str(row.get("permalink") or row.get("sermon_page_url") or "").strip()
+    catalog_has_transcript = truthy(row.get("has_transcript"))
+    review_flags: list[str] = []
+    transcript_status = "catalog-only"
+    if catalog_has_transcript and not transcript_path:
+        transcript_status = "catalog-listed"
+        review_flags.append("Catalog says a transcript exists, but no local transcript file/text was provided.")
     source_files = [str(source)]
     if transcript_path:
         source_files.append(transcript_path)
@@ -68,8 +74,9 @@ def record_from_mapping(row: dict[str, Any], source: Path) -> SermonRecord:
         transcript_path=transcript_path,
         youtube_url=youtube_url,
         duration_seconds=duration_seconds,
-        transcript_status="catalog-only",
-        extra={"catalog_path": str(source), "sermon_page_url": sermon_page_url},
+        transcript_status=transcript_status,
+        review_flags=review_flags,
+        extra={"catalog_path": str(source), "sermon_page_url": sermon_page_url, "catalog_has_transcript": catalog_has_transcript},
     )
 
 
@@ -87,3 +94,10 @@ def duration_from_row(row: dict[str, Any]) -> int | None:
         except (TypeError, ValueError):
             return None
     return None
+
+
+def truthy(value: Any) -> bool:
+    if isinstance(value, bool):
+        return value
+    normalized = str(value or "").strip().casefold()
+    return normalized in {"1", "true", "yes", "y"}

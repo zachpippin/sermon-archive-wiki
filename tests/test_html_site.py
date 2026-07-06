@@ -25,8 +25,13 @@ def test_html_site_writes_chrome_openable_pages(tmp_path: Path) -> None:
     assert "Example Church Sermon Archive" in index.read_text(encoding="utf-8")
     assert 'data-sortable' in index.read_text(encoding="utf-8")
     assert "data-sort-initial" in index.read_text(encoding="utf-8")
-    assert "Ordinary Courage" in sermon.read_text(encoding="utf-8")
-    assert "Private local files. Not published." in sermon.read_text(encoding="utf-8")
+    index_text = index.read_text(encoding="utf-8")
+    sermon_text = sermon.read_text(encoding="utf-8")
+    assert "Ordinary Courage" in sermon_text
+    assert "Private local files. Not published." in sermon_text
+    assert '<audio controls preload="metadata"' in sermon_text
+    assert "2026-07-05_Ordinary_Courage.mp3" in sermon_text
+    assert '#audio">Listen</a>' in index_text
 
 
 def test_html_review_page_lists_actionable_items(tmp_path: Path) -> None:

@@ -22,3 +22,22 @@ def test_external_summary_command_tags_generated_summary() -> None:
     assert "Ordinary Courage" in summarized[0].generated_summary
     assert "Courage" in summarized[0].themes
     assert summarized[0].questionable_claims
+
+
+def test_external_summary_command_can_skip_without_flags(tmp_path: Path) -> None:
+    command_path = tmp_path / "skip_summary.py"
+    command_path.write_text('import json\nprint(json.dumps({"skipped": True}))\n', encoding="utf-8")
+    records = [
+        SermonRecord(
+            title="Ordinary Courage",
+            date="2026-07-05",
+            transcript_text="Joshua 1 says be strong and courageous.",
+            transcript_status="provided",
+        )
+    ]
+
+    summarized = apply_external_summary(records, f"{sys.executable} {command_path}")
+
+    assert summarized[0].summary_status == "none"
+    assert summarized[0].generated_summary == ""
+    assert summarized[0].review_flags == []

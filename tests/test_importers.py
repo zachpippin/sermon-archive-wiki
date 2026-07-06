@@ -1,10 +1,13 @@
 from pathlib import Path
 
+from sermon_archive_wiki.catalog import record_from_mapping
 from sermon_archive_wiki.importers import (
     collect_records,
     merge_records,
+    record_from_html_transcript_file,
     record_from_transcript_file,
     records_from_archivist_archive,
+    records_from_html_transcript_dir,
     records_from_transcript_dir,
 )
 from sermon_archive_wiki.models import SermonRecord
@@ -78,6 +81,64 @@ def test_transcript_file_prefers_leading_title_metadata(tmp_path: Path) -> None:
     record = record_from_transcript_file(transcript)
 
     assert record.title == "Revelation 8:6-9:21"
+
+
+def test_html_transcript_file_extracts_paragraphs_after_transcript_heading(tmp_path: Path) -> None:
+    html = tmp_path / "2026-07-19_Steady_Hope.html"
+    html.write_text(
+        "<p>Intro metadata</p>"
+        "<p>Transcript</p>"
+        "<p>Turn to Romans 8.</p>"
+        "<p>Future glory teaches the church to endure.</p>",
+        encoding="utf-8",
+    )
+
+    record = record_from_html_transcript_file(html)
+
+    assert record.title == "Steady Hope"
+    assert record.date == "2026-07-19"
+    assert record.transcript_status == "provided"
+    assert record.transcript_text == "Turn to Romans 8.\n\nFuture glory teaches the church to endure."
+
+
+def test_html_transcript_dir_imports_saved_sermon_pages() -> None:
+    records = records_from_html_transcript_dir(Path("examples/fixtures/html"))
+
+    assert [record.title for record in records] == ["Steady Hope"]
+    assert "future glory" in records[0].transcript_text.casefold()
+
+
+def test_collect_records_merges_catalog_and_html_transcript(tmp_path: Path) -> None:
+    catalog = tmp_path / "catalog.csv"
+    catalog.write_text(
+        "date,title,speaker,has_transcript\n"
+        "7/19/26,Steady Hope,Jane Pastor,True\n",
+        encoding="utf-8",
+    )
+    html_dir = tmp_path / "html"
+    html_dir.mkdir()
+    (html_dir / "2026-07-19_Steady_Hope.html").write_text(
+        "<p>Transcript</p><p>Romans 8 gives steady hope.</p>",
+        encoding="utf-8",
+    )
+
+    records = collect_records(catalog_paths=[catalog], html_transcript_dirs=[html_dir])
+
+    assert len(records) == 1
+    assert records[0].speaker == "Jane Pastor"
+    assert records[0].transcript_status == "provided"
+    assert "Romans 8" in records[0].transcript_text
+
+
+def test_catalog_flags_claimed_transcript_without_local_text(tmp_path: Path) -> None:
+    record = record_from_mapping(
+        {"date": "7/19/26", "title": "Steady Hope", "speaker": "Jane Pastor", "has_transcript": "True"},
+        tmp_path / "catalog.csv",
+    )
+
+    assert record.transcript_status == "catalog-listed"
+    assert "Catalog says a transcript exists" in record.review_flags[0]
+    assert record.extra["catalog_has_transcript"] is True
 
 
 def test_transcript_dir_skips_work_logs(tmp_path: Path) -> None:

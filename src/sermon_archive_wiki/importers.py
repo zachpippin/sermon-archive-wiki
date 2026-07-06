@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from html.parser import HTMLParser
 import json
 from pathlib import Path
 import re
@@ -16,6 +17,7 @@ from .youtube import records_from_youtube_metadata_file
 
 
 TRANSCRIPT_EXTENSIONS = {".txt", ".md"}
+HTML_TRANSCRIPT_EXTENSIONS = {".html", ".htm"}
 CAPTION_EXTENSIONS = {".srt", ".vtt"}
 AUDIO_EXTENSIONS = {".mp3", ".m4a", ".wav", ".aac", ".flac"}
 IGNORED_TRANSCRIPT_STEMS = {"transcription_log", "current_batch"}
@@ -23,6 +25,7 @@ IGNORED_TRANSCRIPT_STEMS = {"transcription_log", "current_batch"}
 
 def collect_records(
     transcript_dirs: Iterable[Path] = (),
+    html_transcript_dirs: Iterable[Path] = (),
     caption_dirs: Iterable[Path] = (),
     audio_dirs: Iterable[Path] = (),
     catalog_paths: Iterable[Path] = (),
@@ -35,6 +38,8 @@ def collect_records(
             records.extend(records_from_catalog(path))
     for directory in transcript_dirs:
         records.extend(records_from_transcript_dir(directory))
+    for directory in html_transcript_dirs:
+        records.extend(records_from_html_transcript_dir(directory))
     for directory in caption_dirs:
         records.extend(records_from_caption_dir(directory))
     for directory in audio_dirs:
@@ -91,6 +96,89 @@ def record_from_transcript_file(path: Path) -> SermonRecord:
         transcript_status="provided",
         youtube_url=str(fields.get("youtube_url") or ""),
     )
+
+
+def records_from_html_transcript_dir(directory: Path) -> list[SermonRecord]:
+    if not directory.exists():
+        return []
+    return [
+        record_from_html_transcript_file(path)
+        for path in sorted(directory.rglob("*"))
+        if path.suffix.lower() in HTML_TRANSCRIPT_EXTENSIONS and not is_ignored_transcript_file(path)
+    ]
+
+
+def record_from_html_transcript_file(path: Path) -> SermonRecord:
+    raw = path.read_text(encoding="utf-8")
+    date, title = title_from_filename(path)
+    transcript_text = extract_html_transcript_text(raw)
+    status = "provided" if transcript_text.strip() else "missing"
+    flags = ["Transcript text was extracted from local HTML; review paragraphing and markup cleanup."]
+    if not transcript_text.strip():
+        flags.append("HTML transcript file did not contain extractable transcript text.")
+    return SermonRecord(
+        title=title,
+        date=date,
+        source_files=[str(path)],
+        transcript_path=str(path) if transcript_text.strip() else "",
+        transcript_text=transcript_text,
+        transcript_status=status,
+        review_flags=flags,
+    )
+
+
+class ParagraphExtractor(HTMLParser):
+    def __init__(self) -> None:
+        super().__init__(convert_charrefs=True)
+        self.paragraphs: list[str] = []
+        self._in_paragraph = False
+        self._parts: list[str] = []
+
+    def handle_starttag(self, tag: str, attrs: list[tuple[str, str | None]]) -> None:
+        if tag.lower() == "p":
+            self._in_paragraph = True
+            self._parts = []
+        elif tag.lower() == "br" and self._in_paragraph:
+            self._parts.append("\n")
+
+    def handle_endtag(self, tag: str) -> None:
+        if tag.lower() != "p" or not self._in_paragraph:
+            return
+        text = normalize_extracted_text("".join(self._parts))
+        if text:
+            self.paragraphs.append(text)
+        self._in_paragraph = False
+        self._parts = []
+
+    def handle_data(self, data: str) -> None:
+        if self._in_paragraph:
+            self._parts.append(data)
+
+
+def extract_html_transcript_text(raw: str) -> str:
+    parser = ParagraphExtractor()
+    parser.feed(raw)
+    paragraphs = parser.paragraphs
+    if not paragraphs:
+        stripped = re.sub(r"<[^>]+>", " ", raw)
+        paragraphs = [normalize_extracted_text(stripped)]
+
+    transcript_start = next(
+        (
+            index
+            for index, paragraph in enumerate(paragraphs)
+            if paragraph.strip().casefold() in {"transcript", "sermon transcript"}
+        ),
+        -1,
+    )
+    if transcript_start >= 0:
+        paragraphs = paragraphs[transcript_start + 1 :]
+    return "\n\n".join(paragraph for paragraph in paragraphs if paragraph.strip()).strip()
+
+
+def normalize_extracted_text(text: str) -> str:
+    lines = [re.sub(r"[ \t\r\f\v]+", " ", line).strip() for line in text.splitlines()]
+    return "\n".join(line for line in lines if line).strip()
 
 
 def records_from_caption_dir(directory: Path) -> list[SermonRecord]:

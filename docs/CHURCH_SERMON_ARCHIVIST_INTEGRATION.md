@@ -28,7 +28,8 @@ Imported fields:
   decision.
 - `transcript.clean.md` when present.
 - `transcript.raw.txt` when no clean transcript exists.
-- `audio.mp3` as a source file.
+- `audio.mp3` as a source file and playable audio control in the local HTML
+  sermon page.
 
 The importer still marks the page draft and adds a review flag so the pastor
 can confirm metadata and transcript quality.

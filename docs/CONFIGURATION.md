@@ -12,6 +12,8 @@ paths:
   reports_dir: reports
   transcript_dirs:
     - sermon-transcripts
+  html_transcript_dirs:
+    - sermon-page-html
   caption_dirs:
     - captions
   audio_dirs:
@@ -60,8 +62,9 @@ Useful sources:
 
 - CSV/YAML catalog for known metadata.
 - Transcript `.txt` or `.md` files for sermon body text.
+- Saved sermon-page `.html` files that contain transcript paragraphs.
 - Caption `.srt` or `.vtt` files for caption-derived transcript text.
-- Audio files for source tracking.
+- Audio files or catalog audio URLs for source tracking and local HTML playback.
 - YouTube metadata JSON from `yt-dlp`.
 - `church-sermon-archivist/archive` folders.
 

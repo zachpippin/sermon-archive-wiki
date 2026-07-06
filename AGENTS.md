@@ -41,6 +41,7 @@ Ask for these if they are not already known:
 - Where the local HTML website should be written.
 - Where the Obsidian vault should be written.
 - Where transcript files live.
+- Where saved sermon-page HTML files live, if any.
 - Where caption files live, if any.
 - Where sermon audio files live, if any.
 - Whether there is a CSV/YAML catalog.

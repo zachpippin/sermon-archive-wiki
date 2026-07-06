@@ -69,6 +69,7 @@ def init_project(
     config["paths"]["vault_dir"] = typer.prompt("Output vault folder", default=config["paths"]["vault_dir"])
     config["paths"]["site_dir"] = typer.prompt("Output local HTML website folder", default=config["paths"]["site_dir"])
     config["paths"]["transcript_dirs"] = split_list(typer.prompt("Transcript folders, comma-separated", default=""))
+    config["paths"]["html_transcript_dirs"] = split_list(typer.prompt("Saved sermon-page HTML transcript folders, comma-separated", default=""))
     config["paths"]["caption_dirs"] = split_list(typer.prompt("Caption folders (.srt/.vtt), comma-separated", default=""))
     config["paths"]["audio_dirs"] = split_list(typer.prompt("Audio folders, comma-separated", default=""))
     config["paths"]["catalog_paths"] = split_list(typer.prompt("CSV/YAML catalog paths, comma-separated", default=""))
@@ -101,6 +102,7 @@ def ingest(
     html_site: bool = typer.Option(True, "--html-site/--no-html-site", help="Write a local Chrome-openable HTML site."),
     catalog: list[Path] = typer.Option(None, "--catalog", help="CSV/YAML catalog path."),
     transcripts: list[Path] = typer.Option(None, "--transcripts", help="Transcript directory."),
+    html_transcripts: list[Path] = typer.Option(None, "--html-transcripts", help="Saved sermon-page HTML transcript directory."),
     captions: list[Path] = typer.Option(None, "--captions", help="SRT/VTT caption directory."),
     audio: list[Path] = typer.Option(None, "--audio", help="Audio directory."),
     youtube_metadata: list[Path] = typer.Option(None, "--youtube-metadata", help="yt-dlp/exported JSON metadata."),
@@ -122,6 +124,7 @@ def ingest(
         html_site=html_site,
         catalog=catalog or [],
         transcripts=transcripts or [],
+        html_transcripts=html_transcripts or [],
         captions=captions or [],
         audio=audio or [],
         youtube_metadata=youtube_metadata or [],
@@ -154,6 +157,7 @@ def _run_ingest(
     html_site: bool | None = None,
     catalog: list[Path] | None = None,
     transcripts: list[Path] | None = None,
+    html_transcripts: list[Path] | None = None,
     captions: list[Path] | None = None,
     audio: list[Path] | None = None,
     youtube_metadata: list[Path] | None = None,
@@ -176,6 +180,7 @@ def _run_ingest(
 
     records = collect_records(
         transcript_dirs=[Path(p) for p in [*config["paths"]["transcript_dirs"], *(transcripts or [])] if str(p)],
+        html_transcript_dirs=[Path(p) for p in [*config["paths"].get("html_transcript_dirs", []), *(html_transcripts or [])] if str(p)],
         caption_dirs=[Path(p) for p in [*config["paths"]["caption_dirs"], *(captions or [])] if str(p)],
         audio_dirs=[Path(p) for p in [*config["paths"]["audio_dirs"], *(audio or [])] if str(p)],
         catalog_paths=[Path(p) for p in [*config["paths"]["catalog_paths"], *(catalog or [])] if str(p)],

@@ -3,9 +3,9 @@
 Local-first sermon archive wiki builder for churches.
 
 Sermon Archive Wiki takes a church's existing sermon archive -- transcripts,
-caption files, audio files, YouTube metadata, CSV/YAML catalogs, and
-`church-sermon-archivist` output folders -- and generates a private
-Chrome-openable HTML website plus an Obsidian-compatible Markdown vault for
+caption files, saved sermon-page HTML, audio files, YouTube metadata, CSV/YAML
+catalogs, and `church-sermon-archivist` output folders -- and generates a
+private Chrome-openable HTML website plus an Obsidian-compatible Markdown vault for
 pastoral review.
 
 V1 does not publish anything. It creates local files only, including an
@@ -14,6 +14,8 @@ V1 does not publish anything. It creates local files only, including an
 ## What It Does
 
 - Creates a local static HTML website that opens in Chrome.
+- Adds playable audio controls to sermon pages when an audio URL or local audio
+  file is available.
 - Creates one Markdown page per sermon.
 - Adds sortable HTML tables for sermon, speaker, series, scripture, theme, and
   review indexes.
@@ -80,6 +82,7 @@ Keep everything local. Ask whether to run the optional summary pass.
 sermon-archive-wiki ingest \
   --catalog examples/catalog.example.csv \
   --transcripts examples/fixtures/transcripts \
+  --html-transcripts examples/fixtures/html \
   --captions examples/fixtures/captions \
   --audio examples/fixtures/audio \
   --youtube-metadata examples/fixtures/youtube/video.json \
@@ -92,7 +95,7 @@ sermon-archive-wiki ingest \
 ```text
 sermon-wiki-site/
   index.html
-  sermons/
+  sermons/          # one page per sermon, with an audio player when available
   series/
   speakers/
   scripture/

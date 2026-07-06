@@ -1,6 +1,8 @@
 from __future__ import annotations
 
+from concurrent.futures import ThreadPoolExecutor
 import json
+import os
 import shlex
 import subprocess
 from typing import Any
@@ -11,7 +13,21 @@ from .models import SermonRecord, merge_unique
 def apply_external_summary(records: list[SermonRecord], command: str, timeout_seconds: int = 180) -> list[SermonRecord]:
     if not command.strip():
         return records
-    return [_summarize_record(record, command, timeout_seconds) for record in records]
+    max_workers = summary_worker_count()
+    if max_workers <= 1:
+        return [_summarize_record(record, command, timeout_seconds) for record in records]
+    with ThreadPoolExecutor(max_workers=max_workers) as executor:
+        return list(executor.map(lambda record: _summarize_record(record, command, timeout_seconds), records))
+
+
+def summary_worker_count() -> int:
+    raw = os.environ.get("SERMON_ARCHIVE_WIKI_SUMMARY_WORKERS", "").strip()
+    if not raw:
+        return 1
+    try:
+        return max(1, min(16, int(raw)))
+    except ValueError:
+        return 1
 
 
 def _summarize_record(record: SermonRecord, command: str, timeout_seconds: int) -> SermonRecord:
@@ -21,8 +37,11 @@ def _summarize_record(record: SermonRecord, command: str, timeout_seconds: int) 
     payload = {
         "task": "sermon_archive_wiki_summary",
         "instructions": [
+            "Analyze the whole sermon transcript, not only the opening or a vivid excerpt.",
             "Return a concise pastor-review summary for cross-reference purposes.",
+            "Include the main passage or biblical text, sermon thesis, major movements, and pastoral applications when the transcript supports them.",
             "Do not make canonical claims.",
+            "Do not quote long passages from the transcript.",
             "Mark uncertain claims in questionable_claims.",
             "Prefer JSON with summary, themes, topics, related_sermons, questionable_claims.",
         ],
@@ -65,6 +84,8 @@ def _summarize_record(record: SermonRecord, command: str, timeout_seconds: int) 
     if parsed is None:
         record.generated_summary = stdout
     else:
+        if parsed.get("skipped") is True:
+            return record
         record.generated_summary = str(parsed.get("summary") or parsed.get("generated_summary") or "").strip()
         record.themes = merge_unique(record.themes, _as_list(parsed.get("themes")))
         record.topics = merge_unique(record.topics, _as_list(parsed.get("topics")))
